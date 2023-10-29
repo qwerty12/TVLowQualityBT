@@ -19,8 +19,6 @@ import android.net.Uri;
 import android.os.IBinder;
 import android.provider.Settings;
 
-import org.lsposed.hiddenapibypass.HiddenApiBypass;
-
 public class BluetoothService extends Service {
     private static final String TAG = "BluetoothService";
     private static boolean isRunning;
@@ -41,8 +39,6 @@ public class BluetoothService extends Service {
                 .setContentIntent(PendingIntent.getActivity(this, 0, new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(Uri.parse("package:" + getPackageName())), PendingIntent.FLAG_IMMUTABLE))
                 .setOngoing(true)
                 .build());
-
-        HiddenApiBypass.addHiddenApiExemptions("");
 
         bluetoothManager = (BluetoothManager) this.getSystemService(Context.BLUETOOTH_SERVICE);
         if ((bluetoothManager == null) || (bluetoothAdapter = bluetoothManager.getAdapter()) == null) {
