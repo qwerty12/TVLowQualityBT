@@ -94,10 +94,10 @@ public class BluetoothService extends Service {
                 return;
 
             BluetoothCodecConfig newConfig =
-                    new BluetoothCodecConfig(BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC,
+                    new BluetoothCodecConfig(currentConfig.getCodecType(),
                             currentConfig.getCodecPriority(),
-                            BluetoothCodecConfig.SAMPLE_RATE_48000,
-                            BluetoothCodecConfig.BITS_PER_SAMPLE_16,
+                            currentConfig.getSampleRate(),
+                            currentConfig.getBitsPerSample(),
                             currentConfig.getChannelMode(),
                             1001, // Balanced Audio And Connection Quality (660kbps/606kbps)
                             currentConfig.getCodecSpecific2(),

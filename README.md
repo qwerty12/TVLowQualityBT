@@ -6,10 +6,6 @@ If you connect your most-likely low-powered TV box to a Bluetooth headset, this 
 
 * set the LDAC codec to these settings:
 
-    * Bluetooth audio sample rate: 48.0 kHz
-
-    * Bluetooth audio bits per sample: 16 bits/sample
-    
     * Bluetooth audio LDAC codec playback quality: Balanced Audio and Connection Quality (660 kbps/606 kbps)
 
 Why? On Android/Google TV, the Settings app is neutered and offers relatively little compared to your phone.
