@@ -14,7 +14,7 @@ If you connect your most-likely low-powered TV box to a Bluetooth headset, this 
 
 Why? On Android/Google TV, the Settings app is neutered and offers relatively little compared to your phone.
 
-To build, make sure the android-31 android.jar from [Reginer's aosp-android-jar](https://github.com/Reginer/aosp-android-jar) is installed. Instructions can be found [here](https://github.com/1fexd/aosp-android-jar-mirror#installation).
+To build, make sure the android-31 android.jar from [Reginer's aosp-android-jar](https://github.com/Reginer/aosp-android-jar) is installed. Instructions can be found [here](https://github.com/1fexd/aosp-android-jar-mirror#installation). On that note, this probably won't work past Android 12.
 
 You should make sure the setting in Android's App Info to remove permissions if app is unused is turned off.
 
