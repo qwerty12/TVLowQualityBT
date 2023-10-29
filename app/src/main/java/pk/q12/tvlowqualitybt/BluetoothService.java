@@ -50,13 +50,9 @@ public class BluetoothService extends Service {
             return;
         }
 
-        if (bluetoothAdapter.isEnabled())
-            getBluetoothProfiles();
+        getBluetoothProfiles();
 
-        IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
-        registerReceiver(bluetoothStateReceiver, filter);
-
-        filter = new IntentFilter();
+        IntentFilter filter = new IntentFilter();
         filter.addAction(BluetoothA2dp.ACTION_ACTIVE_DEVICE_CHANGED);
         filter.addAction(BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED);
         //filter.addAction(BluetoothA2dp.ACTION_CODEC_CONFIG_CHANGED);
@@ -66,9 +62,8 @@ public class BluetoothService extends Service {
     @Override
     public void onDestroy() {
         isRunning = false;
-        unregisterBluetoothProfiles();
         unregisterReceiver(activeDeviceReceiver);
-        unregisterReceiver(bluetoothStateReceiver);
+        unregisterBluetoothProfiles();
         super.onDestroy();
     }
 
@@ -76,21 +71,6 @@ public class BluetoothService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         return START_STICKY;
     }
-
-    private final BroadcastReceiver bluetoothStateReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (action != null && action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
-                int bluetoothState = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-                if (bluetoothState == BluetoothAdapter.STATE_ON) {
-                    getBluetoothProfiles();
-                } else if (bluetoothState == BluetoothAdapter.STATE_TURNING_OFF || bluetoothState == BluetoothAdapter.STATE_OFF){
-                    unregisterBluetoothProfiles();
-                }
-            }
-        }
-    };
 
     private void disconnectHeadsetProfile(BluetoothDevice device) {
         if (device == null || headsetProfile == null)
@@ -133,18 +113,6 @@ public class BluetoothService extends Service {
         }
     }
 
-    private final BroadcastReceiver activeDeviceReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            final String action = intent.getAction();
-            if (BluetoothA2dp.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
-                setLdacSettings(intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE));
-            } else if (BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
-                disconnectHeadsetProfile(intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE));
-            }
-        }
-    };
-
     private void getBluetoothProfiles() {
         bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET);
         bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.A2DP);
@@ -164,19 +132,35 @@ public class BluetoothService extends Service {
         }
     }
 
+    private final BroadcastReceiver activeDeviceReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
+            if (BluetoothA2dp.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
+                setLdacSettings(intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE));
+            } else if (BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
+                disconnectHeadsetProfile(intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE));
+            }
+        }
+    };
+
     private final BluetoothProfile.ServiceListener profileListener = new BluetoothProfile.ServiceListener() {
         @Override
         public void onServiceConnected(int profile, BluetoothProfile proxy) {
             if (profile == BluetoothProfile.HEADSET) {
                 headsetProfile = (BluetoothHeadset) proxy;
 
-                for (BluetoothDevice connectedDevice: headsetProfile.getConnectedDevices())
-                    disconnectHeadsetProfile(connectedDevice);
+                if (headsetProfile != null) {
+                    for (BluetoothDevice connectedDevice : headsetProfile.getConnectedDevices())
+                        disconnectHeadsetProfile(connectedDevice);
+                }
             } else if (profile == BluetoothProfile.A2DP) {
                 a2dpProfile = (BluetoothA2dp) proxy;
 
-                for (BluetoothDevice connectedDevice: a2dpProfile.getConnectedDevices())
-                    setLdacSettings(connectedDevice);
+                if (a2dpProfile != null) {
+                    for (BluetoothDevice connectedDevice : a2dpProfile.getConnectedDevices())
+                        setLdacSettings(connectedDevice);
+                }
             }
         }
 
