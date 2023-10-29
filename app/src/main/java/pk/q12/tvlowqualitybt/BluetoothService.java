@@ -16,7 +16,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.Uri;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.provider.Settings;
 
 public class BluetoothService extends Service {
@@ -26,6 +28,20 @@ public class BluetoothService extends Service {
     private BluetoothAdapter bluetoothAdapter;
     private BluetoothA2dp a2dpProfile;
     private BluetoothHeadset headsetProfile;
+    private Handler handler = new Handler(Looper.getMainLooper());
+    private Runnable headsetRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (headsetProfile != null) {
+                for (BluetoothDevice connectedDevice : headsetProfile.getConnectedDevices())
+                    headsetProfile.disconnect(connectedDevice);
+                if (bluetoothAdapter != null) {
+                    bluetoothAdapter.closeProfileProxy(BluetoothProfile.HEADSET, headsetProfile);
+                    headsetProfile = null;
+                }
+            }
+        }
+    };
 
     @Override
     public void onCreate() {
@@ -46,7 +62,8 @@ public class BluetoothService extends Service {
             return;
         }
 
-        getBluetoothProfiles();
+        bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.A2DP);
+        bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET);
 
         IntentFilter filter = new IntentFilter();
         filter.addAction(BluetoothA2dp.ACTION_ACTIVE_DEVICE_CHANGED);
@@ -58,6 +75,7 @@ public class BluetoothService extends Service {
     @Override
     public void onDestroy() {
         isRunning = false;
+        handler.removeCallbacks(headsetRunnable);
         unregisterReceiver(activeDeviceReceiver);
         unregisterBluetoothProfiles();
         super.onDestroy();
@@ -68,19 +86,8 @@ public class BluetoothService extends Service {
         return START_STICKY;
     }
 
-    private void disconnectHeadsetProfile(BluetoothDevice device) {
-        if (device == null || headsetProfile == null)
-            return;
-
-        try {
-            headsetProfile.disconnect(device);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     private void setLdacSettings(BluetoothDevice device) {
-        if (device == null || a2dpProfile == null)
+        if (a2dpProfile == null)
             return;
 
         try {
@@ -109,11 +116,6 @@ public class BluetoothService extends Service {
         }
     }
 
-    private void getBluetoothProfiles() {
-        bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET);
-        bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.A2DP);
-    }
-
     private void unregisterBluetoothProfiles() {
         if (headsetProfile != null) {
             if (bluetoothAdapter != null)
@@ -133,22 +135,38 @@ public class BluetoothService extends Service {
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
             if (BluetoothA2dp.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
-                setLdacSettings(intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE));
-            } else if (BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
-                disconnectHeadsetProfile(intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE));
+                final BluetoothDevice remoteDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                if (remoteDevice == null)
+                    return;
+
+                setLdacSettings(remoteDevice);
+                if (headsetProfile == null)
+                    bluetoothAdapter.getProfileProxy(context, profileListener, BluetoothProfile.HEADSET);
             }
         }
     };
 
     private final BluetoothProfile.ServiceListener profileListener = new BluetoothProfile.ServiceListener() {
+        private Context context;
+
+        public BluetoothProfile.ServiceListener init(Context context) {
+            this.context = context;
+            return this;
+        }
+
         @Override
         public void onServiceConnected(int profile, BluetoothProfile proxy) {
             if (profile == BluetoothProfile.HEADSET) {
                 headsetProfile = (BluetoothHeadset) proxy;
 
                 if (headsetProfile != null) {
-                    for (BluetoothDevice connectedDevice : headsetProfile.getConnectedDevices())
-                        disconnectHeadsetProfile(connectedDevice);
+                    if (headsetProfile.getActiveDevice() == null) {
+                        bluetoothAdapter.closeProfileProxy(BluetoothProfile.HEADSET, headsetProfile);
+                        headsetProfile = null;
+                        return;
+                    }
+                    handler.removeCallbacksAndMessages(null);
+                    handler.postDelayed(headsetRunnable, 10000);
                 }
             } else if (profile == BluetoothProfile.A2DP) {
                 a2dpProfile = (BluetoothA2dp) proxy;
@@ -157,6 +175,9 @@ public class BluetoothService extends Service {
                     for (BluetoothDevice connectedDevice : a2dpProfile.getConnectedDevices())
                         setLdacSettings(connectedDevice);
                 }
+
+                if (headsetProfile == null)
+                    bluetoothAdapter.getProfileProxy(context, profileListener, BluetoothProfile.HEADSET);
             }
         }
 
@@ -168,7 +189,7 @@ public class BluetoothService extends Service {
                 a2dpProfile = null;
             }
         }
-    };
+    }.init(this);
 
     public static boolean isRunning() {
         return isRunning;
