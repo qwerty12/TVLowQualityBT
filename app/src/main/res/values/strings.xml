@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">TV Low Quality BT</string>
+    <string name="notification_channel">bluetooth_service</string>
+</resources>
