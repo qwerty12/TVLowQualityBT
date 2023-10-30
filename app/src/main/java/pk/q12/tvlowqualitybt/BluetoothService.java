@@ -34,8 +34,9 @@ public class BluetoothService extends Service {
     private BluetoothAdapter bluetoothAdapter;
     private BluetoothA2dp a2dpProfile;
     private BluetoothHeadset headsetProfile;
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private final Runnable headsetRunnable = new Runnable() {
+    private final Handler xmModesetHandler = new Handler(Looper.getMainLooper());
+    private final Handler headsetDisconnecthandler = new Handler(Looper.getMainLooper());
+    private final Runnable headsetDisconnectRunnable = new Runnable() {
         @SuppressLint("MissingPermission")
         @Override
         public void run() {
@@ -82,7 +83,7 @@ public class BluetoothService extends Service {
     @Override
     public void onDestroy() {
         isRunning = false;
-        handler.removeCallbacks(headsetRunnable);
+        headsetDisconnecthandler.removeCallbacksAndMessages(headsetDisconnectRunnable);
         unregisterReceiver(activeDeviceReceiver);
         unregisterBluetoothProfiles();
         super.onDestroy();
@@ -91,34 +92,64 @@ public class BluetoothService extends Service {
     @SuppressLint("MissingPermission")
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        intentCheck:
-        if (intent != null) {
-            final String action = intent.getAction();
-            if (!ACTION_A2DP_CONNECT.equals(action))
-                break intentCheck;
+        handleActionA2dpConnect(intent);
+        return START_STICKY;
+    }
 
-            if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled())
-                break intentCheck;
+    @SuppressLint("MissingPermission")
+    private void handleActionA2dpConnect(Intent intent) {
+        if (intent == null)
+            return;
 
-            final String wantedAlias = intent.getStringExtra("alias");
-            if (TextUtils.isEmpty(wantedAlias))
-                break intentCheck;
+        final String action = intent.getAction();
+        if (!ACTION_A2DP_CONNECT.equals(action))
+            return;
 
-            final Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
-            if (bondedDevices == null)
-                break intentCheck;
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled())
+            return;
 
-            for (BluetoothDevice bondedDevice : bondedDevices) {
-                final String bondedAlias = bondedDevice.getAlias();
-                if (!TextUtils.isEmpty(bondedAlias) && bondedAlias.contains(wantedAlias)) {
-                    if (a2dpProfile != null)
+        final String wantedAlias = intent.getStringExtra("alias");
+        if (TextUtils.isEmpty(wantedAlias))
+            return;
+
+        final Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
+        if (bondedDevices == null)
+            return;
+
+        for (BluetoothDevice bondedDevice : bondedDevices) {
+            final String bondedAlias = bondedDevice.getAlias();
+            if (!TextUtils.isEmpty(bondedAlias) && bondedAlias.contains(wantedAlias)) {
+                if (a2dpProfile != null) {
+                    if (!a2dpProfile.getConnectedDevices().contains(bondedDevice))
                         a2dpProfile.connect(bondedDevice);
-                    break;
+
+                    final int xmMode = intent.getIntExtra("xm_mode", Integer.MAX_VALUE);
+                    if (xmMode >= -1 && xmMode <= XMHeadphoneSettings.MODE_NOISE_CANCELLING) {
+                        final int xmVolume = intent.getIntExtra("xm_volume", 20);
+                        final boolean xmVoice = intent.getBooleanExtra("xm_voice", false);
+                        xmModesetHandler.removeCallbacksAndMessages(null);
+                        xmModesetHandler.postDelayed(() -> {
+                            final boolean enabled = xmMode != -1;
+                            final byte mode = enabled ? (byte) xmMode : 0;
+                            int volume = 0;
+                            boolean voiceOptimized = false;
+
+                            if (mode == XMHeadphoneSettings.MODE_AMBIENT_SOUND) {
+                                volume = xmVolume > 20 ? 20 : xmVolume < 0 ? 0 : xmVolume;
+                                voiceOptimized = xmVoice;
+                            }
+
+                            try {
+                                XMHeadphoneSettings.setAmbientSound(bondedDevice, enabled, mode, volume, voiceOptimized);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }, 1000);
+                    }
                 }
+                return;
             }
         }
-
-        return START_STICKY;
     }
 
     @SuppressLint("MissingPermission")
@@ -195,8 +226,8 @@ public class BluetoothService extends Service {
                 headsetProfile = (BluetoothHeadset) proxy;
 
                 if (headsetProfile != null) {
-                    handler.removeCallbacksAndMessages(null);
-                    handler.postDelayed(headsetRunnable, HEADSET_DISCONNECT_DELAY_MS);
+                    headsetDisconnecthandler.removeCallbacksAndMessages(null);
+                    headsetDisconnecthandler.postDelayed(headsetDisconnectRunnable, HEADSET_DISCONNECT_DELAY_MS);
                 }
             } else if (profile == BluetoothProfile.A2DP) {
                 a2dpProfile = (BluetoothA2dp) proxy;
