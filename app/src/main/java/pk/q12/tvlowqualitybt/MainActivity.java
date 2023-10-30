@@ -8,6 +8,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.PowerManager;
+import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
@@ -33,10 +35,13 @@ public class MainActivity extends Activity {
             if (permissions[i].equals(Manifest.permission.BLUETOOTH_CONNECT) && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
                 if (!BluetoothService.isRunning()) {
                     startService(new Intent(this, BluetoothService.class));
+                    if (!((PowerManager) getSystemService(POWER_SERVICE)).isIgnoringBatteryOptimizations(getPackageName()))
+                        Toast.makeText(this, "Please whitelist TV Low Quality BT from energy optimisation in Android settings", Toast.LENGTH_SHORT).show();
                 }
-                finish();
-                return;
+                break;
             }
         }
+
+        finish();
     }
 }
