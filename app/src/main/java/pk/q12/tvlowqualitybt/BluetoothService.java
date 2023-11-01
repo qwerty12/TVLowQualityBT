@@ -53,8 +53,8 @@ public class BluetoothService extends Service {
 
     @Override
     public void onCreate() {
-        super.onCreate();
         isRunning = true;
+        super.onCreate();
 
         startForeground(1, new Notification.Builder(this, getString(R.string.notification_channel))
                 .setSmallIcon(R.mipmap.ic_launcher_round)
@@ -82,14 +82,14 @@ public class BluetoothService extends Service {
 
     @Override
     public void onDestroy() {
-        isRunning = false;
-        headsetDisconnecthandler.removeCallbacksAndMessages(headsetDisconnectRunnable);
+        xmModesetHandler.removeCallbacksAndMessages(null);
+        headsetDisconnecthandler.removeCallbacksAndMessages(null);
         unregisterReceiver(activeDeviceReceiver);
         unregisterBluetoothProfiles();
+        isRunning = false;
         super.onDestroy();
     }
 
-    @SuppressLint("MissingPermission")
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         handleActionA2dpConnect(intent);
@@ -120,7 +120,8 @@ public class BluetoothService extends Service {
             final String bondedAlias = bondedDevice.getAlias();
             if (!TextUtils.isEmpty(bondedAlias) && bondedAlias.contains(wantedAlias)) {
                 if (a2dpProfile != null) {
-                    if (!a2dpProfile.getConnectedDevices().contains(bondedDevice))
+                    final boolean isDeviceAlreadyConnected = a2dpProfile.getConnectedDevices().contains(bondedDevice);
+                    if (!isDeviceAlreadyConnected)
                         a2dpProfile.connect(bondedDevice);
 
                     final int xmMode = intent.getIntExtra("xm_mode", Integer.MAX_VALUE);
@@ -135,7 +136,7 @@ public class BluetoothService extends Service {
                             boolean voiceOptimized = false;
 
                             if (mode == XMHeadphoneSettings.MODE_AMBIENT_SOUND) {
-                                volume = xmVolume > 20 ? 20 : xmVolume < 0 ? 0 : xmVolume;
+                                volume = Math.min(Math.max(xmVolume, 0), 20);
                                 voiceOptimized = xmVoice;
                             }
 
@@ -144,7 +145,7 @@ public class BluetoothService extends Service {
                             } catch (Exception e) {
                                 e.printStackTrace();
                             }
-                        }, 1000);
+                        }, isDeviceAlreadyConnected ? 1000 : 2000);
                     }
                 }
                 return;
