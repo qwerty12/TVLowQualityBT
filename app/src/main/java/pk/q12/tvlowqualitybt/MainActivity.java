@@ -36,7 +36,7 @@ public class MainActivity extends Activity {
                 if (!BluetoothService.isRunning()) {
                     startService(new Intent(this, BluetoothService.class));
                     if (!((PowerManager) getSystemService(POWER_SERVICE)).isIgnoringBatteryOptimizations(getPackageName()))
-                        Toast.makeText(this, "Please whitelist TV Low Quality BT from energy optimisation in Android settings", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "Please whitelist TV Low Quality BT from energy optimisation in Android settings. Also make sure to turn off remove permissions if app is unused", Toast.LENGTH_SHORT).show();
                 }
                 break;
             }
