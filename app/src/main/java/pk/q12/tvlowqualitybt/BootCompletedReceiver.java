@@ -11,8 +11,14 @@ public class BootCompletedReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
-            if (context.getApplicationContext().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED)
-                context.startService(new Intent(context, BluetoothService.class));
+            if (context.getApplicationContext().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                final Intent bluetoothService = new Intent(context, BluetoothService.class);
+                try {
+                    context.startService(bluetoothService);
+                } catch (IllegalStateException ignored) {
+                    context.startForegroundService(bluetoothService);
+                }
+            }
         }
     }
 }
