@@ -57,7 +57,7 @@ public class BluetoothService extends Service {
         super.onCreate();
 
         startForeground(1, new Notification.Builder(this, getString(R.string.notification_channel))
-                .setSmallIcon(R.mipmap.ic_launcher_round)
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("TV Low Quality BT")
                 .setContentText("Bluetooth Service is active")
                 .setContentIntent(PendingIntent.getActivity(this, 0, new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(Uri.parse("package:" + getPackageName())), PendingIntent.FLAG_IMMUTABLE))

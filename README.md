@@ -43,3 +43,5 @@ To set the mode, add ` --ei xm_mode -1` to the `am` command above. Replace `-1` 
 * [ExtA2DP](https://github.com/anonymix007/ExtA2DP)
 
 * [sony-headphones-control](https://github.com/ClusterM/sony-headphones-control.git)
+
+* GreenTurtwig for the [icon](https://pictogrammers.com/library/mdi/icon/headphones-bluetooth/), added with [IconKitchen](https://icon.kitchen/)
