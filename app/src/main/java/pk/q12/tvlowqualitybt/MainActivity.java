@@ -11,23 +11,23 @@ import android.os.Bundle;
 import android.os.PowerManager;
 import android.widget.Toast;
 
-public class MainActivity extends Activity {
+public final class MainActivity extends Activity {
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         createNotificationChannel();
         requestPermissions(new String[] {Manifest.permission.BLUETOOTH_CONNECT}, 93270);
     }
 
     private void createNotificationChannel() {
-        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        NotificationChannel notificationChannel = new NotificationChannel(getString(R.string.notification_channel), getString(R.string.notification_channel), NotificationManager.IMPORTANCE_DEFAULT);
+        final NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        final NotificationChannel notificationChannel = new NotificationChannel(getString(R.string.notification_channel), getString(R.string.notification_channel), NotificationManager.IMPORTANCE_DEFAULT);
         notificationManager.createNotificationChannel(notificationChannel);
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(final int requestCode, final String[] permissions, final int[] grantResults) {
         if (requestCode != 93270)
             return;
 

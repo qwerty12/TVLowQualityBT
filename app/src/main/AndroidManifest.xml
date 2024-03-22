@@ -21,6 +21,8 @@
             android:name=".MainActivity"
             android:excludeFromRecents="true"
             android:exported="true"
+            android:persistableMode="persistNever"
+            android:stateNotNeeded="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -32,7 +34,8 @@
         <service
             android:name=".BluetoothService"
             android:enabled="true"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.BLUETOOTH_CONNECT">
             <intent-filter>
                 <action android:name="pk.q12.tvlowqualitybt.ACTION_A2DP_CONNECT" />
             </intent-filter>

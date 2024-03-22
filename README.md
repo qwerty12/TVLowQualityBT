@@ -2,7 +2,9 @@
 
 If you connect your most-likely low-powered TV box to a Bluetooth headset, this will do the following:
 
-* disconnect the Headset/Call profile after 30 seconds to stop Android from rapidly reconnecting and to give time for the A2DP profile to connect
+* disconnect the Headset/Call and A2DP profiles ASAP if your headset automatically connects to your TV box while it's sleeping
+
+* disconnect the Headset profile after 30 seconds to stop Android from rapidly reconnecting, and to give time for the A2DP profile to connect
 
     * note that using `setConnectionPolicy` to disable the headset profile on a device without disconnection afterwards requires your app to have `android.permission.BLUETOOTH_PRIVILEGED`, which we obviously are not going to get
 

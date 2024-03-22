@@ -16,24 +16,29 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.hardware.display.DisplayManager;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.view.Display;
 
 import java.util.Set;
 
-public class BluetoothService extends Service {
+public final class BluetoothService extends Service {
     private static final String TAG = "BluetoothService";
     private static final String ACTION_A2DP_CONNECT = "pk.q12.tvlowqualitybt.ACTION_A2DP_CONNECT";
     private static final long HEADSET_DISCONNECT_DELAY_MS = 30000;
     private static boolean isRunning;
     private BluetoothManager bluetoothManager;
+    private DisplayManager displayManager;
     private BluetoothAdapter bluetoothAdapter;
     private BluetoothA2dp a2dpProfile;
     private BluetoothHeadset headsetProfile;
+    private boolean disconectHeadsetsNow = false;
     private final Handler xmModesetHandler = new Handler(Looper.getMainLooper());
     private final Handler headsetDisconnecthandler = new Handler(Looper.getMainLooper());
     private final Runnable headsetDisconnectRunnable = new Runnable() {
@@ -41,7 +46,7 @@ public class BluetoothService extends Service {
         @Override
         public void run() {
             if (headsetProfile != null) {
-                for (BluetoothDevice connectedDevice : headsetProfile.getConnectedDevices())
+                for (final BluetoothDevice connectedDevice : headsetProfile.getConnectedDevices())
                     headsetProfile.disconnect(connectedDevice);
                 if (bluetoothAdapter != null) {
                     bluetoothAdapter.closeProfileProxy(BluetoothProfile.HEADSET, headsetProfile);
@@ -70,10 +75,11 @@ public class BluetoothService extends Service {
             return;
         }
 
+        displayManager = (DisplayManager) this.getSystemService(Context.DISPLAY_SERVICE);
         bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.A2DP);
         bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET);
 
-        IntentFilter filter = new IntentFilter();
+        final IntentFilter filter = new IntentFilter();
         filter.addAction(BluetoothA2dp.ACTION_ACTIVE_DEVICE_CHANGED);
         filter.addAction(BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED);
         //filter.addAction(BluetoothA2dp.ACTION_CODEC_CONFIG_CHANGED);
@@ -91,13 +97,13 @@ public class BluetoothService extends Service {
     }
 
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
+    public int onStartCommand(final Intent intent, final int flags, final int startId) {
         handleActionA2dpConnect(intent);
         return START_STICKY;
     }
 
     @SuppressLint("MissingPermission")
-    private void handleActionA2dpConnect(Intent intent) {
+    private void handleActionA2dpConnect(final Intent intent) {
         if (intent == null)
             return;
 
@@ -116,7 +122,7 @@ public class BluetoothService extends Service {
         if (bondedDevices == null)
             return;
 
-        for (BluetoothDevice bondedDevice : bondedDevices) {
+        for (final BluetoothDevice bondedDevice : bondedDevices) {
             final String bondedAlias = bondedDevice.getAlias();
             if (!TextUtils.isEmpty(bondedAlias) && bondedAlias.contains(wantedAlias)) {
                 if (a2dpProfile != null) {
@@ -142,7 +148,7 @@ public class BluetoothService extends Service {
 
                             try {
                                 XMHeadphoneSettings.setAmbientSound(bondedDevice, enabled, mode, volume, voiceOptimized);
-                            } catch (Exception e) {
+                            } catch (final Throwable e) {
                                 e.printStackTrace();
                             }
                         }, isDeviceAlreadyConnected ? 1000 : 2000);
@@ -154,33 +160,30 @@ public class BluetoothService extends Service {
     }
 
     @SuppressLint("MissingPermission")
-    private void setLdacSettings(BluetoothDevice device) {
-        if (a2dpProfile == null)
+    private void setLdacSettings(final BluetoothDevice device) {
+        final long CODEC_SPECIFIC_1_CONN_QUALITY = 1002; // Optimized for Connection Quality (330kbps/303kbps)
+        final BluetoothCodecStatus codecStatus = a2dpProfile.getCodecStatus(device);
+        final BluetoothCodecConfig currentConfig = codecStatus.getCodecConfig();
+        if (currentConfig.getCodecType() != BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC)
             return;
 
-        try {
-            BluetoothCodecStatus codecStatus = a2dpProfile.getCodecStatus(device);
-            BluetoothCodecConfig currentConfig = codecStatus.getCodecConfig();
-            if (currentConfig.getCodecType() != BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC)
-                return;
+        if (currentConfig.getCodecSpecific1() == CODEC_SPECIFIC_1_CONN_QUALITY)
+            return;
 
-            BluetoothCodecConfig newConfig =
-                    new BluetoothCodecConfig(currentConfig.getCodecType(),
-                            currentConfig.getCodecPriority(),
-                            currentConfig.getSampleRate(),
-                            currentConfig.getBitsPerSample(),
-                            currentConfig.getChannelMode(),
-                            1002, // Optimized for Connection Quality (330kbps/303kbps)
-                            currentConfig.getCodecSpecific2(),
-                            currentConfig.getCodecSpecific3(),
-                            currentConfig.getCodecSpecific4());
+        final BluetoothCodecConfig newConfig =
+                new BluetoothCodecConfig(currentConfig.getCodecType(),
+                        currentConfig.getCodecPriority(),
+                        currentConfig.getSampleRate(),
+                        currentConfig.getBitsPerSample(),
+                        currentConfig.getChannelMode(),
+                        CODEC_SPECIFIC_1_CONN_QUALITY,
+                        currentConfig.getCodecSpecific2(),
+                        currentConfig.getCodecSpecific3(),
+                        currentConfig.getCodecSpecific4());
 
-            for (int i = 0; i < 3; ++i) {
-                a2dpProfile.setCodecConfigPreference(device, newConfig);
-                Thread.sleep(100);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+        for (int i = 0; i < 3; ++i) {
+            a2dpProfile.setCodecConfigPreference(device, newConfig);
+            SystemClock.sleep(100);
         }
     }
 
@@ -199,13 +202,32 @@ public class BluetoothService extends Service {
     }
 
     private final BroadcastReceiver activeDeviceReceiver = new BroadcastReceiver() {
+        @SuppressLint("MissingPermission")
         @Override
-        public void onReceive(Context context, Intent intent) {
+        public void onReceive(final Context context, final Intent intent) {
             final String action = intent.getAction();
             if (BluetoothA2dp.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
                 final BluetoothDevice remoteDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                 if (remoteDevice == null)
                     return;
+
+                if (a2dpProfile == null)
+                    return;
+
+                for (final Display display : displayManager.getDisplays()) {
+                    if (display.getState() == Display.STATE_OFF) {
+                        a2dpProfile.disconnect(remoteDevice);
+                        if (headsetProfile != null) {
+                            headsetProfile.disconnect(remoteDevice);
+                        } else {
+                            if (remoteDevice.isConnected()) {
+                                disconectHeadsetsNow = true;
+                                bluetoothAdapter.getProfileProxy(BluetoothService.this, profileListener, BluetoothProfile.HEADSET);
+                            }
+                        }
+                        return;
+                    }
+                }
 
                 setLdacSettings(remoteDevice);
             } else if (BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
@@ -222,26 +244,33 @@ public class BluetoothService extends Service {
     private final BluetoothProfile.ServiceListener profileListener = new BluetoothProfile.ServiceListener() {
         @SuppressLint("MissingPermission")
         @Override
-        public void onServiceConnected(int profile, BluetoothProfile proxy) {
+        public void onServiceConnected(final int profile, final BluetoothProfile proxy) {
             if (profile == BluetoothProfile.HEADSET) {
-                headsetProfile = (BluetoothHeadset) proxy;
+                final boolean arriba = disconectHeadsetsNow;
+                if (arriba)
+                    disconectHeadsetsNow = false;
 
-                if (headsetProfile != null) {
-                    headsetDisconnecthandler.removeCallbacksAndMessages(null);
+                headsetProfile = (BluetoothHeadset) proxy;
+                if (headsetProfile == null)
+                    return;
+
+                headsetDisconnecthandler.removeCallbacksAndMessages(null);
+                if (!arriba)
                     headsetDisconnecthandler.postDelayed(headsetDisconnectRunnable, HEADSET_DISCONNECT_DELAY_MS);
-                }
+                else
+                    headsetDisconnectRunnable.run();
             } else if (profile == BluetoothProfile.A2DP) {
                 a2dpProfile = (BluetoothA2dp) proxy;
+                if (a2dpProfile == null)
+                    return;
 
-                if (a2dpProfile != null) {
-                    for (BluetoothDevice connectedDevice : a2dpProfile.getConnectedDevices())
-                        setLdacSettings(connectedDevice);
-                }
+                for (final BluetoothDevice connectedDevice : a2dpProfile.getConnectedDevices())
+                    setLdacSettings(connectedDevice);
             }
         }
 
         @Override
-        public void onServiceDisconnected(int profile) {
+        public void onServiceDisconnected(final int profile) {
             if (profile == BluetoothProfile.HEADSET) {
                 headsetProfile = null;
             } else if (profile == BluetoothProfile.A2DP) {
@@ -255,7 +284,7 @@ public class BluetoothService extends Service {
     }
 
     @Override
-    public IBinder onBind(Intent intent) {
+    public IBinder onBind(final Intent intent) {
         return null;
     }
 }
