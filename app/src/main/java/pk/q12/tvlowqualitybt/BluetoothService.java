@@ -39,6 +39,8 @@ public final class BluetoothService extends Service {
     private BluetoothA2dp a2dpProfile;
     private BluetoothHeadset headsetProfile;
     private boolean disconectHeadsetsNow = false;
+    private long lastManualConnectTime = 0;
+    private String lastManualConnectMac = null;
     private final Handler xmModesetHandler = new Handler(Looper.getMainLooper());
     private final Handler headsetDisconnecthandler = new Handler(Looper.getMainLooper());
     private final Runnable headsetDisconnectRunnable = new Runnable() {
@@ -127,8 +129,12 @@ public final class BluetoothService extends Service {
             if (!TextUtils.isEmpty(bondedAlias) && bondedAlias.contains(wantedAlias)) {
                 if (a2dpProfile != null) {
                     final boolean isDeviceAlreadyConnected = a2dpProfile.getConnectedDevices().contains(bondedDevice);
-                    if (!isDeviceAlreadyConnected)
-                        a2dpProfile.connect(bondedDevice);
+                    if (!isDeviceAlreadyConnected) {
+                        if (a2dpProfile.connect(bondedDevice)) {
+                            lastManualConnectTime = SystemClock.elapsedRealtime();
+                            lastManualConnectMac = bondedDevice.getAddress();
+                        }
+                    }
 
                     final int xmMode = intent.getIntExtra("xm_mode", Integer.MAX_VALUE);
                     if (xmMode >= -1 && xmMode <= XMHeadphoneSettings.MODE_NOISE_CANCELLING) {
@@ -205,15 +211,28 @@ public final class BluetoothService extends Service {
         @SuppressLint("MissingPermission")
         @Override
         public void onReceive(final Context context, final Intent intent) {
-            final String action = intent.getAction();
-            if (BluetoothA2dp.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
-                final BluetoothDevice remoteDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                if (remoteDevice == null)
-                    return;
+        final String action = intent.getAction();
+        if (BluetoothA2dp.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
+            boolean skipDisplayCheck = false;
+            final BluetoothDevice remoteDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+            if (remoteDevice == null)
+                return;
 
-                if (a2dpProfile == null)
-                    return;
+            if (a2dpProfile == null)
+                return;
 
+            if (lastManualConnectTime != 0) {
+                if (lastManualConnectMac != null) {
+                    if (SystemClock.elapsedRealtime() - lastManualConnectTime <= 3100 && lastManualConnectMac.equals(remoteDevice.getAddress()))
+                        skipDisplayCheck = true;
+
+                    lastManualConnectMac = null;
+                }
+
+                lastManualConnectTime = 0;
+            }
+
+            if (!skipDisplayCheck) {
                 for (final Display display : displayManager.getDisplays()) {
                     if (display.getState() == Display.STATE_OFF) {
                         a2dpProfile.disconnect(remoteDevice);
@@ -228,16 +247,17 @@ public final class BluetoothService extends Service {
                         return;
                     }
                 }
-
-                setLdacSettings(remoteDevice);
-            } else if (BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
-                final BluetoothDevice remoteDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                if (remoteDevice == null)
-                    return;
-
-                if (headsetProfile == null)
-                    bluetoothAdapter.getProfileProxy(BluetoothService.this, profileListener, BluetoothProfile.HEADSET);
             }
+
+            setLdacSettings(remoteDevice);
+        } else if (BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED.equals(action)) {
+            final BluetoothDevice remoteDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+            if (remoteDevice == null)
+                return;
+
+            if (headsetProfile == null)
+                bluetoothAdapter.getProfileProxy(BluetoothService.this, profileListener, BluetoothProfile.HEADSET);
+        }
         }
     };
 
